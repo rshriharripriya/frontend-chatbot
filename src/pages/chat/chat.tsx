@@ -1,4 +1,42 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+
+// Formatter to fix markdown without line breaks
+const formatMarkdown = (text: string): string => {
+  // Replace common markdown patterns that are missing line breaks
+
+  // Fix headers followed by content (### Header: * item)
+  text = text.replace(/(\*{1,3}[^*]+\*{1,3}:)\s+(\*)/g, '$1\n\n$2');
+
+  // Fix multiple list items on same line (** - text ** - text)
+  text = text.replace(/(\*\*[^\n]*?\*\*)\s+(\*\*)/g, '$1\n');
+
+  // Fix numbered lists followed by text (* **Number.**)
+  text = text.replace(/(\d+\.\s+\*\*[^*]+\*\*[^*]*?\*\*[^*]+\*\*)\s+(\d+\.)/g, '$1\n$2');
+
+  // Ensure headers have blank lines before them
+  text = text.replace(/([^\n])\n(#{1,6}\s+)/g, '$1\n\n$2');
+
+  // Ensure list items have newlines
+  text = text.replace(/(\*\s+[^\n]*?[^\n\*])\s+(\*\s+)/g, '$1\n$2');
+
+  // Fix bold text followed by dash or bullet without line break
+  text = text.replace(/(\*\*[^*]+\*\*:)\s+([*-])/g, '$1\n$2');
+
+  // Add line breaks before numbered lists if missing
+  text = text.replace(/([^\n])\n(\d+\.)/g, '$1\n\n$2');
+
+  // Add line breaks before unordered lists if missing
+  text = text.replace(/([^:\n])\s+(\*\s+)/g, '$1\n$2');
+
+  // Fix dashes followed by text on same line
+  text = text.replace(/(-\s+\*\*[^*]+\*\*[^\n]*?)\s+(-\s+)/g, '$1\n$2');
+
+  // Ensure paragraphs are separated
+  text = text.replace(/([.!?])\s+([A-Z])/g, '$1\n\n$2');
+
+  return text;
+};
 
 export default function ChatInterface() {
   const [userInput, setUserInput] = useState('');
@@ -20,23 +58,24 @@ export default function ChatInterface() {
       });
 
       if (!res.ok) {
-        // Attempt to pull FastAPI error detail from response JSON
         let errorMsg = `Error: ${res.status}`;
         try {
           const errorData = await res.json();
-          errorMsg += errorData.detail
-            ? ` - ${JSON.stringify(errorData.detail)}`
-            : ` - ${JSON.stringify(errorData)}`;
-        } catch {
-          // Could not parse error details
-        }
-        throw new Error(errorMsg);
+          errorMsg += errorData.detail ? ` - ${errorData.detail}` : '';
+        } catch {}
+        setResponse(errorMsg);
+        setLoading(false);
+        return;
       }
 
       const data = await res.json();
-      setResponse(data.output);
+
+      // Format the markdown to fix missing line breaks
+      const formattedOutput = formatMarkdown(data.output);
+
+      setResponse(formattedOutput);
     } catch (error) {
-      setResponse(error.message);
+      setResponse(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -63,8 +102,27 @@ export default function ChatInterface() {
         )}
 
         {response && !loading && (
-          <div className="message bot-message">
-            {response}
+          <div className="message bot-message markdown-response">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => <h1>{children}</h1>,
+                h2: ({ children }) => <h2>{children}</h2>,
+                h3: ({ children }) => <h3>{children}</h3>,
+                h4: ({ children }) => <h4>{children}</h4>,
+                h5: ({ children }) => <h5>{children}</h5>,
+                h6: ({ children }) => <h6>{children}</h6>,
+                p: ({ children }) => <p>{children}</p>,
+                ul: ({ children }) => <ul>{children}</ul>,
+                ol: ({ children }) => <ol>{children}</ol>,
+                li: ({ children }) => <li>{children}</li>,
+                code: ({ children }) => <code>{children}</code>,
+                pre: ({ children }) => <pre>{children}</pre>,
+                blockquote: ({ children }) => <blockquote>{children}</blockquote>,
+                hr: () => <hr />,
+              }}
+            >
+              {response}
+            </ReactMarkdown>
           </div>
         )}
       </div>
