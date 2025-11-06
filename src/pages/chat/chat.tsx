@@ -1,97 +1,86 @@
-import { ChatInput } from "@/components/custom/chatinput";
-import { PreviewMessage, ThinkingMessage } from "../../components/custom/message";
-import { useScrollToBottom } from '@/components/custom/use-scroll-to-bottom';
-import { useState, useRef } from "react";
-import { message } from "../../interfaces/interfaces"
-import { Overview } from "@/components/custom/overview";
-import { Header } from "@/components/custom/header";
-import {v4 as uuidv4} from 'uuid';
+import { useState } from 'react';
 
-//const socket = new WebSocket("ws://localhost:8090"); //change to your websocket endpoint
+export default function ChatInterface() {
+  const [userInput, setUserInput] = useState('');
+  const [response, setResponse] = useState('');
+  const [loading, setLoading] = useState(false);
 
-// get the device (instance)'s websocket endpoint
-const proto = window.location.protocol === "https:" ? "wss" : "ws";
-const host = window.location.hostname;
-const socket = new WebSocket(`${proto}://${host}:8090`);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!userInput.trim()) return;
 
-export function Chat() {
-  const [messagesContainerRef, messagesEndRef] = useScrollToBottom<HTMLDivElement>();
-  const [messages, setMessages] = useState<message[]>([]);
-  const [question, setQuestion] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+    setLoading(true);
+    setResponse('');
 
-  const messageHandlerRef = useRef<((event: MessageEvent) => void) | null>(null);
+    try {
+      const res = await fetch('http://localhost:8000/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: userInput })
+      });
 
-  const cleanupMessageHandler = () => {
-    if (messageHandlerRef.current && socket) {
-      socket.removeEventListener("message", messageHandlerRef.current);
-      messageHandlerRef.current = null;
+      if (!res.ok) {
+        // Attempt to pull FastAPI error detail from response JSON
+        let errorMsg = `Error: ${res.status}`;
+        try {
+          const errorData = await res.json();
+          errorMsg += errorData.detail
+            ? ` - ${JSON.stringify(errorData.detail)}`
+            : ` - ${JSON.stringify(errorData)}`;
+        } catch {
+          // Could not parse error details
+        }
+        throw new Error(errorMsg);
+      }
+
+      const data = await res.json();
+      setResponse(data.output);
+    } catch (error) {
+      setResponse(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-async function handleSubmit(text?: string) {
-  if (!socket || socket.readyState !== WebSocket.OPEN || isLoading) return;
-
-  const messageText = text || question;
-  setIsLoading(true);
-  cleanupMessageHandler();
-  
-  const traceId = uuidv4();
-  setMessages(prev => [...prev, { content: messageText, role: "user", id: traceId }]);
-  socket.send(messageText);
-  setQuestion("");
-
-  try {
-    const messageHandler = (event: MessageEvent) => {
-      setIsLoading(false);
-      if(event.data.includes("[END]")) {
-        return;
-      }
-      
-      setMessages(prev => {
-        const lastMessage = prev[prev.length - 1];
-        const newContent = lastMessage?.role === "assistant" 
-          ? lastMessage.content + event.data 
-          : event.data;
-        
-        const newMessage = { content: newContent, role: "assistant", id: traceId };
-        return lastMessage?.role === "assistant"
-          ? [...prev.slice(0, -1), newMessage]
-          : [...prev, newMessage];
-      });
-
-      if (event.data.includes("[END]")) {
-        cleanupMessageHandler();
-      }
-    };
-
-    messageHandlerRef.current = messageHandler;
-    socket.addEventListener("message", messageHandler);
-  } catch (error) {
-    console.error("WebSocket error:", error);
-    setIsLoading(false);
-  }
-}
-
   return (
-    <div className="flex flex-col min-w-0 h-dvh bg-background">
-      <Header/>
-      <div className="flex flex-col min-w-0 gap-6 flex-1 overflow-y-scroll pt-4" ref={messagesContainerRef}>
-        {messages.length == 0 && <Overview />}
-        {messages.map((message, index) => (
-          <PreviewMessage key={index} message={message} />
-        ))}
-        {isLoading && <ThinkingMessage />}
-        <div ref={messagesEndRef} className="shrink-0 min-w-[24px] min-h-[24px]"/>
+    <div className="chat-container">
+      <div className="chat-window">
+        {userInput && (
+          <div className="message user-message">
+            {userInput}
+          </div>
+        )}
+
+        {loading && (
+          <div className="message bot-message">
+            <div className="skeleton-paragraph">
+              <div className="skeleton-line long"></div>
+              <div className="skeleton-line medium"></div>
+              <div className="skeleton-line long"></div>
+              <div className="skeleton-line short"></div>
+            </div>
+          </div>
+        )}
+
+        {response && !loading && (
+          <div className="message bot-message">
+            {response}
+          </div>
+        )}
       </div>
-      <div className="flex mx-auto px-4 bg-background pb-4 md:pb-6 gap-2 w-full md:max-w-3xl">
-        <ChatInput  
-          question={question}
-          setQuestion={setQuestion}
-          onSubmit={handleSubmit}
-          isLoading={isLoading}
+
+      <form onSubmit={handleSubmit} className="input-form">
+        <input
+          type="text"
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
+          placeholder="Ask me something..."
+          disabled={loading}
         />
-      </div>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Thinking...' : 'Send'}
+        </button>
+      </form>
     </div>
   );
-};
+}
