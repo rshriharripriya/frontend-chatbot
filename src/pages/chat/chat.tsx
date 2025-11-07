@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
-// Formatter to fix markdown without line breaks
 const formatMarkdown = (text: string): string => {
-  // Replace common markdown patterns that are missing line breaks
+  // Fix: Remove line breaks between ** and numbered lists
+  text = text.replace(/\*\*\n\s*(\d+\.)/g, '** $1');
+
+  // Fix: Remove line breaks in bold text that got split
+  text = text.replace(/\*\*\n\s+([^*]+)\*\*/g, '** $1 **');
 
   // Fix headers followed by content (### Header: * item)
   text = text.replace(/(\*{1,3}[^*]+\*{1,3}:)\s+(\*)/g, '$1\n\n$2');
@@ -17,8 +20,8 @@ const formatMarkdown = (text: string): string => {
   // Ensure headers have blank lines before them
   text = text.replace(/([^\n])\n(#{1,6}\s+)/g, '$1\n\n$2');
 
-  // Ensure list items have newlines
-  text = text.replace(/(\*\s+[^\n]*?[^\n\*])\s+(\*\s+)/g, '$1\n$2');
+  // Ensure list items have newlines (but not in bold text)
+  text = text.replace(/(\*\s+[^\n*]+)\s+(\*\s+)/g, '$1\n$2');
 
   // Fix bold text followed by dash or bullet without line break
   text = text.replace(/(\*\*[^*]+\*\*:)\s+([*-])/g, '$1\n$2');
@@ -26,11 +29,8 @@ const formatMarkdown = (text: string): string => {
   // Add line breaks before numbered lists if missing
   text = text.replace(/([^\n])\n(\d+\.)/g, '$1\n\n$2');
 
-  // Add line breaks before unordered lists if missing
-  text = text.replace(/([^:\n])\s+(\*\s+)/g, '$1\n$2');
-
-  // Fix dashes followed by text on same line
-  text = text.replace(/(-\s+\*\*[^*]+\*\*[^\n]*?)\s+(-\s+)/g, '$1\n$2');
+  // Add line breaks before unordered lists if missing (not in bold)
+  text = text.replace(/([^:\n*])\s+(\*\s+[^*])/g, '$1\n$2');
 
   // Ensure paragraphs are separated
   text = text.replace(/([.!?])\s+([A-Z])/g, '$1\n\n$2');
@@ -38,10 +38,12 @@ const formatMarkdown = (text: string): string => {
   return text;
 };
 
+
 export default function ChatInterface() {
   const [userInput, setUserInput] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSkeleton, setShowSkeleton] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +51,7 @@ export default function ChatInterface() {
 
     setLoading(true);
     setResponse('');
+    setShowSkeleton(true);
 
     try {
       const res = await fetch('http://localhost:8000/query', {
@@ -65,19 +68,20 @@ export default function ChatInterface() {
         } catch {}
         setResponse(errorMsg);
         setLoading(false);
+        setShowSkeleton(false);
         return;
       }
 
       const data = await res.json();
-
-      // Format the markdown to fix missing line breaks
       const formattedOutput = formatMarkdown(data.output);
 
+      setShowSkeleton(false);
       setResponse(formattedOutput);
+      setLoading(false);
     } catch (error) {
       setResponse(`Error: ${error.message}`);
-    } finally {
       setLoading(false);
+      setShowSkeleton(false);
     }
   };
 
@@ -90,7 +94,7 @@ export default function ChatInterface() {
           </div>
         )}
 
-        {loading && (
+        {showSkeleton && (
           <div className="message bot-message">
             <div className="skeleton-paragraph">
               <div className="skeleton-line long"></div>
@@ -101,7 +105,7 @@ export default function ChatInterface() {
           </div>
         )}
 
-        {response && !loading && (
+        {!showSkeleton && response && (
           <div className="message bot-message markdown-response">
             <ReactMarkdown
               components={{

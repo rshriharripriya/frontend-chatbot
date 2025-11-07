@@ -111,8 +111,9 @@ html, body {
   color: var(--perplexity-text);
   border-radius: 16px;
   border-bottom-left-radius: 4px;
-  width: auto;
+  width: 100%;
   max-width: 95%;
+  min-width: 300px;
   display: block;
   border: 1px solid #f0f0ee;
   padding: 0;
@@ -203,6 +204,7 @@ html, body {
   margin: 6px 0;
   line-height: 1.6;
   word-break: break-word;
+  display: list-item;
 }
 
 .markdown-response code {
@@ -290,7 +292,6 @@ html, body {
 .input-form {
   display: flex;
   align-items: center;
-  justify-self: center;
   gap: 8px;
   padding: 16px 24px;
   background: var(--perplexity-bg);
@@ -365,7 +366,8 @@ html, body {
   flex-direction: column !important;
   gap: 10px !important;
   margin: 12px 0 !important;
-  width: 100%;
+  width: 100% !important;
+  padding: 14px 18px;
 }
 
 .skeleton-line {
@@ -379,18 +381,22 @@ html, body {
   ) !important;
   background-size: 200% 100% !important;
   animation: loading 1.5s infinite !important;
+  display: block !important;
 }
 
 .skeleton-line.long {
   width: 85% !important;
+  min-width: 200px !important;
 }
 
 .skeleton-line.medium {
   width: 70% !important;
+  min-width: 150px !important;
 }
 
 .skeleton-line.short {
   width: 50% !important;
+  min-width: 100px !important;
 }
 
 @keyframes loading {
@@ -436,5 +442,9 @@ html, body {
 
   .user-message {
     max-width: 85%;
+  }
+
+  .bot-message {
+    min-width: 250px;
   }
 }
